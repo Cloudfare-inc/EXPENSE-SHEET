@@ -35,10 +35,9 @@
 
   <!-- LOGIN -->
   <section id="login" class="card hide">
-    <h2>Sign in</h2>
-    <label for="email">Email</label><input id="email" type="email" autocomplete="email">
-    <label for="pass">Password</label><input id="pass" type="password" autocomplete="current-password">
-    <button id="loginBtn">Sign in</button>
+    <h2>Enter the code</h2>
+    <label for="pass">Access code</label><input id="pass" type="password" autocomplete="current-password">
+    <button id="loginBtn">Enter</button>
     <p class="err" id="loginErr"></p>
   </section>
 
@@ -66,6 +65,7 @@
           <select id="cat"><option>Food</option><option>Transport</option><option>Home</option><option>Fun</option><option>Gifts</option><option>Other</option></select></div>
         <div><label for="date">Date</label><input id="date" type="date"></div>
       </div>
+      <label for="who">Who paid</label><select id="who"></select>
       <button id="addBtn">Save expense</button>
       <p class="err" id="addErr"></p>
     </section>
@@ -89,12 +89,19 @@
 /* ===== 1. PUT YOUR SUPABASE VALUES HERE ===== */
 const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
 const SUPABASE_ANON_KEY = "YOUR-ANON-PUBLIC-KEY";
+// The shared account you create in Supabase. Its password IS your access code.
+const SHARED_EMAIL = "ourexpenses@example.com";
+// Names shown in the "Who paid" list. Change them to your real names.
+const PEOPLE = ["Me", "Her"];
 /* ============================================ */
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = id => document.getElementById(id);
 let rows = [];
 
+PEOPLE.forEach(n => { const o = document.createElement("option"); o.textContent = n; $("who").appendChild(o); });
+try { if (localStorage.getItem("who")) $("who").value = localStorage.getItem("who"); } catch (e) {}
+$("who").addEventListener("change", () => { try { localStorage.setItem("who", $("who").value); } catch (e) {} });
 $("date").value = new Date().toISOString().slice(0, 10);
 $("rate").value = localStorage.getItem("rate") || "22";
 $("rate").addEventListener("input", () => { try { localStorage.setItem("rate", $("rate").value); } catch (e) {} render(); });
@@ -113,9 +120,10 @@ function show(loggedIn) {
   $("app").classList.toggle("hide", !loggedIn);
 }
 
+$("pass").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
 $("loginBtn").onclick = async () => {
-  const { error } = await db.auth.signInWithPassword({ email: $("email").value, password: $("pass").value });
-  $("loginErr").textContent = error ? "Wrong email or password." : "";
+  const { error } = await db.auth.signInWithPassword({ email: SHARED_EMAIL, password: $("pass").value });
+  $("loginErr").textContent = error ? "Wrong code." : "";
   if (!error) { show(true); load(); }
 };
 $("logoutBtn").onclick = async () => { await db.auth.signOut(); show(false); };
@@ -129,10 +137,9 @@ async function load() {
 $("addBtn").onclick = async () => {
   const amount = parseFloat($("amount").value);
   if (!amount || amount <= 0) { $("addErr").textContent = "Enter an amount."; return; }
-  const { data: u } = await db.auth.getUser();
   const { error } = await db.from("expenses").insert({
     amount, currency: $("cur").value, note: $("note").value, category: $("cat").value,
-    spent_on: $("date").value, paid_by: u.user.email
+    spent_on: $("date").value, paid_by: $("who").value
   });
   $("addErr").textContent = error ? error.message : "";
   if (!error) { $("amount").value = ""; $("note").value = ""; load(); }
